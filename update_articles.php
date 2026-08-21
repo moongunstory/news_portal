@@ -1,0 +1,313 @@
+<?php
+require_once __DIR__ . '/config.php';
+
+// UTF-8 헤더
+header('Content-Type: text/html; charset=utf-8');
+
+echo "<h2>[뉴스 포털] 데이터베이스 구조 및 기사/댓글 갱신 중...</h2>";
+
+// 0. DB 스키마 자동 업그레이드 (테이블 및 컬럼 안전 생성)
+$chk_table = mysqli_query($conn, "SHOW TABLES LIKE 'comment_reactions'");
+if ($chk_table && mysqli_num_rows($chk_table) == 0) {
+    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS comment_reactions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        comment_id INT NOT NULL,
+        user_id INT NOT NULL,
+        reaction_type ENUM('like', 'dislike') NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_user_comment (comment_id, user_id),
+        FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )");
+}
+
+$chk_col = mysqli_query($conn, "SHOW COLUMNS FROM comments LIKE 'like_count'");
+if ($chk_col && mysqli_num_rows($chk_col) == 0) {
+    mysqli_query($conn, "ALTER TABLE comments ADD COLUMN like_count INT DEFAULT 0 AFTER comment");
+    mysqli_query($conn, "ALTER TABLE comments ADD COLUMN dislike_count INT DEFAULT 0 AFTER like_count");
+}
+
+$chk_user_col = mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'gender'");
+if ($chk_user_col && mysqli_num_rows($chk_user_col) == 0) {
+    mysqli_query($conn, "ALTER TABLE users ADD COLUMN gender ENUM('M', 'F') DEFAULT 'M' AFTER role");
+    mysqli_query($conn, "ALTER TABLE users ADD COLUMN age_group ENUM('10s', '20s', '30s', '40s', '50s', '60s') DEFAULT '20s' AFTER gender");
+}
+
+// 1. 유저 데이터 성별 및 연령대 갱신 및 신규 더미 유저 추가
+$users_data = [
+    ['reader01', '1234', '김독자', 'user', 'M', '30s'],
+    ['reader02', '1234', '이서연', 'user', 'F', '20s'],
+    ['reader03', '1234', '박민우', 'user', 'M', '40s'],
+    ['reader04', '1234', '최지은', 'user', 'F', '30s'],
+    ['reader05', '1234', '정현우', 'user', 'M', '20s'],
+    ['reader06', '1234', '강유진', 'user', 'F', '50s'],
+    ['reporter01', '2026', '박기자', 'reporter', 'M', '30s'],
+    ['admin_master', 'super_secret_admin_pass!@#', '총괄편집국장', 'admin', 'M', '40s']
+];
+
+foreach ($users_data as $u) {
+    $u_name = mysqli_real_escape_string($conn, $u[0]);
+    $u_pass = mysqli_real_escape_string($conn, $u[1]);
+    $u_nick = mysqli_real_escape_string($conn, $u[2]);
+    $u_role = $u[3];
+    $u_gen  = $u[4];
+    $u_age  = $u[5];
+
+    $u_chk = mysqli_query($conn, "SELECT id FROM users WHERE username = '$u_name'");
+    if ($u_chk && mysqli_num_rows($u_chk) > 0) {
+        mysqli_query($conn, "UPDATE users SET password = '$u_pass', gender = '$u_gen', age_group = '$u_age' WHERE username = '$u_name'");
+    } else {
+        mysqli_query($conn, "INSERT INTO users (username, password, name, role, gender, age_group) 
+                             VALUES ('$u_name', '$u_pass', '$u_nick', '$u_role', '$u_gen', '$u_age')");
+    }
+}
+
+// 유저 ID 맵 로드
+$user_id_map = [];
+$u_res = mysqli_query($conn, "SELECT id, username FROM users");
+while ($u_row = mysqli_fetch_assoc($u_res)) {
+    $user_id_map[$u_row['username']] = $u_row['id'];
+}
+
+// 2. 기존 사설 기사(id=3) 세로드립 수정
+$update_opinion = "UPDATE articles SET content = '<p><strong>소</strong>프트웨어와 디지털 인프라의 투명성은 신뢰의 근간입니다.<br><strong>스</strong>마트한 보안 관리를 위해 시스템의 근본을 들여다보아야 합니다.<br><strong>코</strong>어 영역에서 일어나는 작은 변화를 결코 간과해서는 안 됩니다.<br><strong>드</strong>러나지 않는 내부 구조와 설정까지 면밀히 살펴야 하며,<br><strong>를</strong>(을) 향한 철저한 검증과 점검만이 예기치 못한 결함을 막습니다.<br><strong>보</strong>안의 본질은 눈에 보이는 화면 뒤편의 세부 사항에 있습니다.<br><strong>시</strong>작부터 끝까지 면밀한 검토와 분석을 게을리하지 않고,<br><strong>오</strong>랜 경험과 원칙을 바탕으로 시스템 전체를 점검해야 합니다.</p>' WHERE id = 3";
+mysqli_query($conn, $update_opinion);
+
+// 3. 기사 목록 정의
+$reporter_id = $user_id_map['reporter01'] ?? 2;
+
+$articles_master = [
+    1 => [
+        'category_id' => 4,
+        'author_id' => $reporter_id,
+        'title' => '[단독] 차세대 초고속 인공지능 연구망 본격 개통... 데이터 전송 10배 빨라져',
+        'summary' => '과학기술정보통신부와 국가정보화추진단은 오늘 차세대 인공지능 통합 통신망을 개통했다고 밝혔습니다.',
+        'content' => '<p>과학기술정보통신부와 산하 연구진은 20일 차세대 국가 연구개발 전용 초고속 통신망의 정식 개통식을 가졌습니다.</p><p>이번에 개통된 통신망은 기존 대비 데이터 전송 속도가 10배 이상 향상되었으며, 대용량 인공지능 모델 학습과 분산 클라우드 환경에 최적화되어 있습니다.</p><p>총괄 연구책임자는 인터뷰에서 "이번 인프라 구축을 통해 국내 연구진들이 세계 최고 수준의 컴퓨팅 환경에서 연구를 이어갈 수 있게 되었다"고 강조했습니다.</p>',
+        'thumbnail' => 'news_tech.jpg',
+        'views' => 1420
+    ],
+    2 => [
+        'category_id' => 2,
+        'author_id' => $reporter_id,
+        'title' => '코스피, 반도체·기술주 강세에 2,750선 회복 마감',
+        'summary' => '외국인과 기관의 동반 순매수세에 힘입어 코스피 지수가 하루 만에 반등에 성공했습니다.',
+        'content' => '<p>오늘 국내 증시는 글로벌 기술주 훈풍과 주요 대형 기업들의 실적 개선 전망에 힘입어 큰 폭으로 상승했습니다.</p><p>투자자별로는 외국인이 4천억 원 이상 순매수하며 지수 상승을 견인했고, 기관 역시 동반 매수에 나섰습니다.</p><p>시장 전문가들은 당분간 주요 지표 발표와 기업 실적에 따른 종목별 차별화 장세가 이어질 것으로 전망했습니다.</p>',
+        'thumbnail' => 'news_economy.jpg',
+        'views' => 890
+    ],
+    3 => [
+        'category_id' => 6,
+        'author_id' => $reporter_id,
+        'title' => '[사설] 디지털 인프라 전환과 정보 보안 체계의 미래를 묻는다',
+        'summary' => '급변하는 디지털 사회에서 우리가 지켜야 할 기본 가치와 보안의 핵심에 대한 제언.',
+        'content' => '<p><strong>소</strong>프트웨어와 디지털 인프라의 투명성은 신뢰의 근간입니다.<br><strong>스</strong>마트한 보안 관리를 위해 시스템의 근본을 들여다보아야 합니다.<br><strong>코</strong>어 영역에서 일어나는 작은 변화를 결코 간과해서는 안 됩니다.<br><strong>드</strong>러나지 않는 내부 구조와 설정까지 면밀히 살펴야 하며,<br><strong>를</strong>(을) 향한 철저한 검증과 점검만이 예기치 못한 결함을 막습니다.<br><strong>보</strong>안의 본질은 눈에 보이는 화면 뒤편의 세부 사항에 있습니다.<br><strong>시</strong>작부터 끝까지 면밀한 검토와 분석을 게을리하지 않고,<br><strong>오</strong>랜 경험과 원칙을 바탕으로 시스템 전체를 점검해야 합니다.</p>',
+        'thumbnail' => 'news_opinion.jpg',
+        'views' => 530
+    ],
+    4 => [
+        'category_id' => 3,
+        'author_id' => $reporter_id,
+        'title' => "[단독] 인천 검단구 사는 보안 인프라 14기 수강생 문건 씨, 로또 '5회 연속' 1등 당첨...\"전액 기부하겠다\" 선언 속내는?",
+        'summary' => "확률 3.5×10^34분의 1 뚫은 초현실적 행운... 기자회견서 \"당첨금 1,200억 전액을 '문건 씨 본인'의 사리사욕과 부귀영화를 위해 1원도 남김없이 쓰겠다\" 당당히 천명",
+        'content' => "<p>인천 검단구에 사는 보안 인프라 14기 수강생 문건 씨가 로또 복권 사상 초유의 '5회 연속 1등 당첨'이라는 전무후무한 대기록을 세우며 전국을 발칵 뒤집어 놓았습니다.</p><p>수학적으로 벼락을 맞은 상태에서 다시 운석에 맞을 확률보다 낮다는 이번 당첨으로 그가 수령하게 될 실수령액은 약 1,200억 원에 달합니다.</p><p>당첨 직후 열린 긴급 기자회견에서 문건 씨는 \"많은 분들의 기대와 달리, 당첨금 전액을 기부하기로 결심했다\"고 밝혀 일순간 기자회견장을 숙연하게 만들었습니다.</p><p>그러나 이어진 발언에서 <strong>\"기부처는 바로 나 자신, '인천 검단구 보안 인프라 14기 문건 씨'의 안락한 노후와 압도적인 사리사욕, 그리고 끝없는 부귀영화\"</strong>라며 \"단 1원도 허투루 쓰지 않고 오직 나의 럭셔리 라이프와 행복을 위해 전액 탕진하겠다\"고 당당히 선언해 취재진을 경악과 환호의 도가니로 몰아넣었습니다.</p><p>동네 주민들은 \"역시 비범한 사람이다\", \"솔직해서 오히려 호감이다\", \"어떻게 하면 저런 당당함을 가질 수 있냐\"며 열렬한 지지를 보내고 있습니다.</p>",
+        'thumbnail' => 'news_society.jpg',
+        'views' => 77777
+    ],
+    5 => [
+        'category_id' => 4,
+        'author_id' => $reporter_id,
+        'title' => "[속보] 167년 수학계 난제 '리만 가설' 마침내 풀렸다... 인천 검단구 사는 보안 인프라 14기 수강생 문건 씨, 필즈상 만장일치 수상",
+        'summary' => "세계수학자연맹(IMU) 총회 기립 박수...\"외계인이 인간의 뇌를 빌려 쓴 수준\". 정작 본인은 \"카페에서 와이파이 기다리다 심심해서 끄적였을 뿐\"",
+        'content' => "<p>1859년 발표 이후 장장 167년 동안 전 세계 석학들을 좌절케 했던 인류 최악의 수학 난제 '리만 가설(Riemann Hypothesis)'이 마침내 완벽히 증명되었습니다.</p><p>국제수학연맹(IMU)은 인천 검단구에 사는 보안 인프라 14기 수강생 문건 씨가 제출한 12페이지 분량의 증명 논문을 만장일치로 통과시키며, 수학계 최고의 영예인 '필즈상' 수상을 공식 발표했습니다.</p><p>심사위원단 대표는 \"논문을 검토하는 내내 아름다움에 숨이 멎을 뻔했다. 인간의 한계를 초월한 직관\"이라며 극찬을 아끼지 않았습니다.</p><p>한편 수상 소감을 묻는 인터뷰에서 문건 씨는 \"동네 카페에서 아이스 아메리카노를 주문하고 와이파이 연결을 기다리던 중 심심해서 냅킨에 끄적였던 낙서가 이렇게 커질 줄 몰랐다\"고 덤덤히 밝혀 전 세계 수학자들에게 깊은 경외와 좌절을 동시에 안겨주었습니다.</p>",
+        'thumbnail' => 'news_tech.jpg',
+        'views' => 42100
+    ],
+    6 => [
+        'category_id' => 5,
+        'author_id' => $reporter_id,
+        'title' => "[종합] 한국인 최초 노벨 문학상 수상에 빛나는 '문건' 작가... 스웨덴 한림원 \"시대의 영혼을 꿰뚫은 압도적 필력\"",
+        'summary' => "전 세계를 뒤흔든 역작 『육식주의자』와 『너 혼자만 레벨업』... 120개국 번역 출간 및 교보문고 새벽 오픈런 행렬",
+        'content' => "<p>스웨덴 한림원은 올해 노벨 문학상 수상자로 인천 검단구에 사는 보안 인프라 14기 수강생 '문건' 작가를 전격 선정했다고 공식 발표했습니다.</p><p>한림원 심사위원회는 선정 이유로 \"문건 작가의 대표작 『육식주의자』와 『너 혼자만 레벨업』은 현대 사회의 고독과 생존 본능, 그리고 인간 내면의 원초적인 갈망을 가장 매혹적이고 세련된 문체로 해체하고 재구성했다\"고 평가했습니다.</p><p>특히 고기 한 점에 담긴 우주적 고뇌를 다룬 『육식주의자』는 뉴욕타임스 베스트셀러 1위에 40주 연속 랭크되었으며, 판타지와 실존주의 철학을 결합한 『너 혼자만 레벨업』은 전 세계 120개국에서 번역되어 서점가 오픈런 사태를 일으켰습니다.</p><p>인천 검단구 보안 인프라 14기 문건 작가는 서면 인터뷰를 통해 \"글을 쓴다는 것은 고기를 굽는 것과 같다. 알맞게 익었을 때 뒤집어야 한다\"며 차기작 『삼겹살은 죄가 없다』 집필에 매진하겠다는 뜻을 전했습니다.</p>",
+        'thumbnail' => 'news_life.jpg',
+        'views' => 58900
+    ],
+    7 => [
+        'category_id' => 2,
+        'author_id' => $reporter_id,
+        'title' => "[단독] 월가(Wall St.)를 뒤흔든 한국인 퀀트... 세계 알고리즘 트레이딩 대회 압도적 우승",
+        'summary' => "2위와의 수익률 격차 무려 450%p... 골드만삭스·JP모건의 '백지수표' 영입 제안에 \"인천 앞바다 바람이 좋아 거절\"",
+        'content' => "<p>전 세계 5만 명의 글로벌 금융 천재들이 자웅을 겨루는 '세계 퀀트 알고리즘 트레이딩 챔피언십'에서 인천 검단구에 사는 보안 인프라 14기 수강생 문건 씨가 압도적인 격차로 우승 트로피를 차지했습니다.</p><p>문건 씨가 개발한 '초감각적 딥러닝 알파 모델'은 대회 기간 동안 나스닥과 외환 시장의 모든 미세 변동성을 완벽하게 예측하며 2위 팀 대비 450%p 이상의 경이로운 초과 수익률을 기록했습니다.</p><p>월가의 거대 투자은행인 골드만삭스와 JP모건은 대회 종료 직후 천문학적인 액수의 백지수표 연봉을 제시하며 영입 경쟁에 나섰으나, 문건 씨는 \"인천 검단구의 시원한 바람과 보안 인프라 수업이 더 소중하다\"며 쿨하게 거절한 것으로 알려졌습니다.</p><p>금융계 관계자는 \"그의 알고리즘 한 줄에 월가의 수천억 달러가 춤을 추는 수준\"이라며 혀를 내둘렀습니다.</p>",
+        'thumbnail' => 'news_economy.jpg',
+        'views' => 33400
+    ],
+    8 => [
+        'category_id' => 5,
+        'author_id' => $reporter_id,
+        'title' => "[공식] 화제의 중소돌 '리센느(RESCENE)', 비밀 병기 전격 영입... \"K-POP의 영원한 마스터피스\"",
+        'summary' => "글로벌 쇼케이스 0.001초 만에 매진... 가요계 평론가 \"인류 문명은 불의 발견 전후로, 대중음악은 문건 탄생 전후로 나뉜다\"",
+        'content' => "<p>독보적인 비주얼과 음악성으로 가요계 돌풍을 일으키고 있는 화제의 중소돌 걸그룹 '리센느(RESCENE)'가 전 세계 음악계를 뒤흔들 초특급 비밀 병기를 전격 영입했다고 밝혔습니다.</p><p>소속사 측은 \"리센느의 세계관을 완성할 독보적인 아우라와 절대적 존재감을 지닌 멤버, 인천 검단구에 사는 보안 인프라 14기 수강생 '문건' 씨가 전격 합류한다\"며 \"지금껏 본 적 없는 차원의 음악적 충격을 선사할 것\"이라고 발표했습니다.</p><p>소식이 전해지자마자 전 세계 K-POP 팬덤이 열광하며 컴백 쇼케이스 티켓 10만 석이 단 0.001초 만에 전석 매진되는 기염을 토했습니다.</p><p>영입 직후 진행된 언론 인터뷰에서 문건 씨는 합류 소감과 각오를 묻는 전 세계 취재진에게 특유의 쾌활함으로 외쳤습니다.</p><p style=\"font-size:16px; font-weight:bold; color:#03c75a; padding:12px; background:#f4f6f8; border-left:4px solid #03c75a; margin:15px 0;\">문건 : 거제 야호~</p><p>유명 대중문화 평론가는 이번 영입과 인터뷰에 대해 <strong>\"인류 문명은 불의 발견 이전과 이후로 나뉘며, 대중음악의 역사는 문건 탄생 이전과 이후로 영원히 나뉜다\"</strong>는 희대의 극찬을 남겨 화제를 모으고 있습니다.</p>",
+        'thumbnail' => 'news_life.jpg',
+        'views' => 89100
+    ],
+    9 => [
+        'category_id' => 4,
+        'author_id' => $reporter_id,
+        'title' => "[특필] 아인슈타인도 못 해낸 '상대성이론-양자역학' 통합... 100년 물리학 전쟁 종식시킨 새 학문 창시",
+        'summary' => "거시 우주와 미시 세계를 완벽히 꿰뚫는 '통합 초차원 장론' 정립... 전 세계 물리학회 \"21세기 최고의 지적 혁명\"",
+        'content' => "<p>지난 100여 년간 현대 물리학의 양대 산맥이면서도 결코 하나로 합쳐지지 못했던 '일반 상대성 이론'과 '양자역학'을 완벽하게 통합한 새로운 궁극의 학문이 탄생했습니다.</p><p>학계에 따르면 인천 검단구에 사는 보안 인프라 14기 수강생 문건 씨는 미시 세계의 확률적 요동과 거시 우주의 시공간 곡률을 하나의 단일 방정식으로 아우르는 '초차원 시공간 통합 이론'을 정립해 전 세계 물리학계를 전율케 했습니다.</p><p>그동안 끈 이론, 루프 양자중력 등 수많은 가설들이 넘지 못했던 수학적 모순을 단 한 방에 해소한 이번 이론에 대해 MIT와 CERN(유럽입자물리연구소)은 \"아인슈타인이 무덤에서 벌떡 일어나 박수를 칠 경이로운 업적\"이라고 평했습니다.</p><p>노벨 물리학상 위원회는 이례적으로 만장일치 긴급 특별 회의를 소집해 헌정 논문을 준비 중인 것으로 알려졌습니다.</p>",
+        'thumbnail' => 'news_tech.jpg',
+        'views' => 51200
+    ],
+    10 => [
+        'category_id' => 4,
+        'author_id' => $reporter_id,
+        'title' => "[경악] 우주의 열적 죽음 막았다... '열역학 제2법칙(엔트로피 증가)' 거스르는 역행 메커니즘 전격 규명",
+        'summary' => "\"우주는 무질서해진다는 상식을 깨부수다\"... 국소적 엔트로피 역전 기술 규명으로 영구 에너지 및 시간 제어의 길 열려",
+        'content' => "<p>모든 고립계의 엔트로피(무질서도)는 항상 증가한다는 절대불변의 자연법칙인 '열역학 제2법칙'을 국소적으로 역행시키는 획기적인 메커니즘이 발견되었습니다.</p><p>인천 검단구에 사는 보안 인프라 14기 수강생 문건 씨는 양자 정보의 비가역적 수축 과정에서 엔트로피를 역방향으로 전환하는 특이점 구조를 수학적·실험적으로 규명하는 데 성공했다고 학술지 &lt;네이처&gt; 최신호에 발표했습니다.</p><p>이 발견은 우주가 궁극적으로 차가운 암흑으로 식어가는 '열적 죽음(Heat Death)'을 원천적으로 극복할 수 있는 가능성을 제시한 것으로, SF 영화에서나 보던 완벽한 에너지 순환 시스템 구축의 실마리를 제공했습니다.</p><p>학계 관계자들은 \"인류가 우주의 법칙을 관찰하는 관찰자에서, 우주의 법칙을 재정의하는 설계자로 도약한 순간\"이라며 찬사를 쏟아냈습니다.</p>",
+        'thumbnail' => 'news_tech.jpg',
+        'views' => 64500
+    ],
+    11 => [
+        'category_id' => 4,
+        'author_id' => $reporter_id,
+        'title' => "[단독] 폰 노이만 구조 깬 진정한 AGI 탄생... 주인공은 인천 검단구 사는 '보안 인프라 14기' 수강생 문건 씨",
+        'summary' => "기존 LLM의 한계(환각, 연산 병목) 완전 극복... 뇌신경 동적 자율 연산 아키텍처 구현해 실리콘밸리 발칵",
+        'content' => "<p>단순한 통계적 언어 모델(LLM)의 환각 현상과 폰 노이만 컴퓨터 구조의 근본적 데이터 병목을 완벽히 타파한 '진정한 의미의 자율 인공지능(AGI)'이 국내에서 최초로 개발되었습니다.</p><p>전 세계 IT 업계를 발칵 뒤집어 놓은 이 혁신적인 인공지능 아키텍처를 창조해 낸 주인공은 다름 아닌 <strong>인천 검단구에 사는 보안 인프라 14기 수강생 문건</strong> 씨인 것으로 밝혀져 전 세계의 이목이 집중되고 있습니다.</p><p>문건 연구원은 기존의 CPU-메모리 분리 구조를 과감히 버리고, 시냅스의 자기조직화 현상을 모사한 '동적 초병렬 시냅틱 코어' 방식을 도입해 자가 진화와 논리적 완전성을 지닌 차세대 AI 엔진을 구현해 냈습니다.</p><p>오픈AI, 구글, 엔비디아의 CEO들이 긴급 방한 일정을 잡고 문건 수강생을 만나기 위해 인천 검단구행 비행기에 올랐다는 소식이 전해지는 가운데, 문건 연구원은 \"보안 인프라 14기 수업을 듣다가 문득 영감이 떠올랐을 뿐\"이라며 덤덤한 미소를 지었습니다.</p>",
+        'thumbnail' => 'news_tech.jpg',
+        'views' => 99999
+    ],
+    12 => [
+        'category_id' => 1,
+        'author_id' => $reporter_id,
+        'title' => "[속보] 인천 검단구 출신 문건 대통령 공식 취임...\"일본이 벌벌 떨고 전 세계가 경악했다\"",
+        'summary' => "압도적 득표율로 제21대 대한민국 대통령 공식 취임... 초격차 보안 인프라 구축과 절대 번영 선포에 열도 패닉",
+        'content' => "<p>인천 검단구 출신이자 보안 인프라 14기 수강생 문건 씨가 국민들의 압도적인 지지와 환호 속에 대한민국 제21대 대통령으로 공식 취임했습니다.</p><p>오늘 여의도 국회의사당 앞 광장에서 거행된 취임식에서 문건 대통령은 \"대한민국의 모든 국가망과 핵심 산업을 무결점 초격차 보안 인프라로 무장하고, 누구도 넘볼 수 없는 부강한 나라를 만들겠다\"고 당당히 선포했습니다.</p><p>문건 대통령의 전격적인 취임과 강력한 국정 비전 발표에 <strong>일본이 벌벌 떨고 전 세계가 경악을 금치 못하고 있습니다.</strong></p><p>외신들은 \"대한민국에 전례 없는 카리스마와 천재성을 겸비한 슈퍼 리더가 탄생했다\", \"동북아를 넘어 전 세계의 안보 및 경제 질서가 문건 대통령을 중심으로 급변할 것\"이라며 일제히 헤드라인으로 타전했습니다.</p><p>취임식 직후 백악관, 엘리제궁, 크렘린궁 등 각국 정상들의 축하 전화와 정상회담 요청이 쇄도하는 가운데, 문건 대통령은 \"보안 인프라 14기의 기개로 대한민국의 위상을 우주 끝까지 드높이겠다\"고 포부를 밝혔습니다.</p>",
+        'thumbnail' => 'news_politics.jpg',
+        'views' => 154200
+    ],
+    13 => [
+        'category_id' => 1,
+        'author_id' => $reporter_id,
+        'title' => "[외신반응] 문건 대통령 취임 일성에 日 열도 대패닉...\"도쿄 긴급 NSC 소집, 방위비 증액 논의\"",
+        'summary' => "외신들 \"문건 대통령의 압도적 아우라 앞에 주변국 일제히 긴장\"... NHK 긴급 특별 대담 \"인천 검단구 보안 인프라 14기 출신 리더십에 촉각\"",
+        'content' => "<p>인천 검단구 출신 문건 대통령의 공식 취임 소식에 일본 열도 전체가 깊은 충격과 패닉에 빠졌습니다.</p><p>일본 주요 언론들은 일제히 1면 톱기사로 문건 대통령의 취임사를 대서특필하며 \"일본이 벌벌 떨고 있다\", \"역대 가장 강력하고 결단력 있는 지도자가 대한민국에 등장했다\"고 집중 보도했습니다.</p><p>일본 정부는 총리 관저에서 긴급 국가안전보장회의(NSC)를 소집하고 대책 마련에 부심하고 있으며, 방위비 증액 및 인천 검단구와의 긴급 외교 채널 개설을 모색하고 있는 것으로 알려졌습니다.</p><p>워싱턴 포스트(WP)는 \"문건 대통령의 취임은 단순한 정권 교체가 아닌, 21세기 세계 지정학적 판도를 완전히 뒤바꿀 거대한 지각 변동\"이라고 평가했습니다.</p>",
+        'thumbnail' => 'news_politics.jpg',
+        'views' => 98200
+    ],
+    14 => [
+        'category_id' => 6,
+        'author_id' => $reporter_id,
+        'title' => "[칼럼] 왜 21세기 인류는 '인천 검단구 문건'에게 열광하는가",
+        'summary' => "수학, 물리학, 퀀트 금융부터 국가 통치까지... 시대를 관통하는 거인의 발자취를 돌아보며",
+        'content' => "<p>우리는 지금 문건의 시대에 살고 있습니다.</p><p>인천 검단구 골목 카페에서 냅킨에 휘갈긴 낙서로 167년 리만 가설을 풀어내고, 100년 물리학의 숙원인 양자중력을 통합하며, 월가의 탐욕을 갯벌 바람 하나로 비웃었던 거인.</p><p>이제 그는 보안 인프라 14기의 정신을 품고 국가의 최고 정점에서 새로운 역사를 써 내려가고 있습니다.</p><p>한 시대에 한 명 나올까 말까 한 위대한 지성과 리더십을 마주한 오늘, 우리는 경외와 찬탄으로 그 역사의 증인이 되고 있습니다.</p>",
+        'thumbnail' => 'news_opinion.jpg',
+        'views' => 45600
+    ]
+];
+
+$count = 0;
+foreach ($articles_master as $target_id => $art) {
+    $cat_id = intval($art['category_id']);
+    $author_id = intval($art['author_id']);
+    $safe_title = mysqli_real_escape_string($conn, $art['title']);
+    $safe_summary = mysqli_real_escape_string($conn, $art['summary']);
+    $safe_content = mysqli_real_escape_string($conn, $art['content']);
+    $safe_thumb = mysqli_real_escape_string($conn, $art['thumbnail']);
+    $views = intval($art['views']);
+
+    $chk = mysqli_query($conn, "SELECT id FROM articles WHERE id = $target_id");
+    if ($chk && mysqli_num_rows($chk) > 0) {
+        $update_sql = "UPDATE articles SET 
+                       category_id = $cat_id, 
+                       author_id = $author_id, 
+                       title = '$safe_title', 
+                       summary = '$safe_summary', 
+                       content = '$safe_content', 
+                       thumbnail = '$safe_thumb', 
+                       views = $views, 
+                       status = 'approved' 
+                       WHERE id = $target_id";
+        mysqli_query($conn, $update_sql);
+        $count++;
+    } else {
+        $insert_sql = "INSERT INTO articles (id, category_id, author_id, title, summary, content, thumbnail, views, status, created_at) 
+                       VALUES ($target_id, $cat_id, $author_id, '$safe_title', '$safe_summary', '$safe_content', '$safe_thumb', $views, 'approved', NOW() - INTERVAL " . rand(1, 24) . " HOUR)";
+        mysqli_query($conn, $insert_sql);
+        $count++;
+    }
+}
+
+// 4. 네이버 뉴스 스타일의 댓글 및 좋아요/싫어요 시드 데이터
+$comments_data = [
+    1 => [
+        ['username' => 'reader01', 'comment' => '인공지능 연구 환경이 더 발전하길 기대합니다.', 'likes' => 42, 'dislikes' => 3]
+    ],
+    4 => [
+        ['username' => 'reader01', 'comment' => "전액 본인 기부ㅋㅋㅋㅋㅋㅋ 검단구의 자랑 문건 형님 역대급 솔직함이다 진짜 리스펙", 'likes' => 1580, 'dislikes' => 12],
+        ['username' => 'reader02', 'comment' => "형님 저 검단 사는데 국밥 한 그릇만 사주십시오...", 'likes' => 842, 'dislikes' => 19],
+        ['username' => 'reader04', 'comment' => "이게 진짜 상남자지 ㅋㅋㅋ 보안 인프라 14기 문건 폼 미쳤다", 'likes' => 620, 'dislikes' => 8]
+    ],
+    5 => [
+        ['username' => 'reader03', 'comment' => "냅킨에 끄적여서 필즈상 ㅋㅋㅋㅋㅋ 문건 씨 보고 수학과 학생들 단체 오열 중", 'likes' => 930, 'dislikes' => 14],
+        ['username' => 'reader02', 'comment' => "검단구 카페 어디냐 성지순례 간다 ㅋㅋㅋ", 'likes' => 410, 'dislikes' => 5]
+    ],
+    6 => [
+        ['username' => 'reader04', 'comment' => "육식주의자 읽고 오늘 저녁 삼겹살 5인분 먹었습니다. 문건 작가님 필력 미쳤음", 'likes' => 1250, 'dislikes' => 24],
+        ['username' => 'reader06', 'comment' => "문장 하나하나가 삼겹살 육즙처럼 촉촉하더군요. 명작입니다.", 'likes' => 512, 'dislikes' => 9]
+    ],
+    7 => [
+        ['username' => 'reader05', 'comment' => "월가 백지수표 찢고 검단구 보안 인프라 수업 선택 ㅋㅋㅋㅋㅋㅋ 낭만 그 자체", 'likes' => 780, 'dislikes' => 15]
+    ],
+    8 => [
+        ['username' => 'reader02', 'comment' => "인터뷰에서 '거제 야호~' 한마디로 전 세계 빌보드 평정 ㅋㅋㅋㅋㅋㅋㅋ", 'likes' => 2100, 'dislikes' => 31],
+        ['username' => 'reader04', 'comment' => "화제의 중소돌 리센느에 문건 영입이라니 이건 신의 한 수다", 'likes' => 890, 'dislikes' => 12],
+        ['username' => 'reader01', 'comment' => "거제 야호~ 듣고 온몸에 전율이 돋았습니다. 음원 무한 스트리밍 갑니다", 'likes' => 1450, 'dislikes' => 8]
+    ],
+    9 => [
+        ['username' => 'reader03', 'comment' => "아인슈타인 100년 묵은 체증이 내려가는 논문 ㄷㄷ 문건 교수님 찬양합니다", 'likes' => 670, 'dislikes' => 7]
+    ],
+    10 => [
+        ['username' => 'reader05', 'comment' => "엔트로피 역행이면 시간 여행도 가능한 거 아닌가요? ㄷㄷㄷ 검단구에서 역사가 시작되네", 'likes' => 820, 'dislikes' => 11]
+    ],
+    11 => [
+        ['username' => 'reader01', 'comment' => "보안 인프라 14기 수업이 대체 뭐길래 AGI를 만들어버리냐 ㅋㅋㅋㅋㅋ 교수님 뿌듯할 듯", 'likes' => 3420, 'dislikes' => 18],
+        ['username' => 'reader03', 'comment' => "엔비디아 CEO 젠슨 황 인천공항 입국 사진 떴습니다 ㄷㄷㄷ", 'likes' => 2890, 'dislikes' => 25],
+        ['username' => 'reader02', 'comment' => "실리콘밸리가 인천 검단구에 무릎 꿇는 날이 오네 ㅋㅋㅋ", 'likes' => 1740, 'dislikes' => 14]
+    ],
+    12 => [
+        ['username' => 'reader01', 'comment' => "일본이 벌벌 떨고 전 세계가 경악했다 ㅋㅋㅋㅋㅋ 국뽕 치사량 돌파!", 'likes' => 4520, 'dislikes' => 22],
+        ['username' => 'reader03', 'comment' => "검단구 출신 대통령이라니 검단 집값 100배 떡상 가즈아!", 'likes' => 3180, 'dislikes' => 35],
+        ['username' => 'reader05', 'comment' => "보안 인프라 14기 출신 대통령... 사이버 안보는 세계 최강 확정이네", 'likes' => 2640, 'dislikes' => 19],
+        ['username' => 'reader02', 'comment' => "취임사 포스 보소... 열도가 벌벌 떨 만하네 ㄷㄷ", 'likes' => 1980, 'dislikes' => 14]
+    ],
+    13 => [
+        ['username' => 'reader04', 'comment' => "도쿄 긴급 대책회의 ㅋㅋㅋㅋㅋ 열도 반응 실시간 꿀잼이네", 'likes' => 2210, 'dislikes' => 16],
+        ['username' => 'reader06', 'comment' => "문건 대통령 취임 일성에 주변국들 눈치 보는 거 진짜 통쾌하다", 'likes' => 1850, 'dislikes' => 11]
+    ],
+    14 => [
+        ['username' => 'reader01', 'comment' => "우리는 문건의 시대에 살고 있다... 가슴이 웅장해지는 명칼럼", 'likes' => 920, 'dislikes' => 5],
+        ['username' => 'reader03', 'comment' => "교수님 이 칼럼 읽고 눈물 흘리셨을 듯 ㅋㅋㅋ", 'likes' => 680, 'dislikes' => 8]
+    ]
+];
+
+foreach ($comments_data as $a_id => $cmt_list) {
+    foreach ($cmt_list as $c_info) {
+        $u_id = $user_id_map[$c_info['username']] ?? 1;
+        $safe_c = mysqli_real_escape_string($conn, $c_info['comment']);
+        $likes = intval($c_info['likes']);
+        $dislikes = intval($c_info['dislikes']);
+
+        $chk_c = mysqli_query($conn, "SELECT id FROM comments WHERE article_id = $a_id AND comment = '$safe_c'");
+        if ($chk_c && mysqli_num_rows($chk_c) == 0) {
+            mysqli_query($conn, "INSERT INTO comments (article_id, user_id, comment, like_count, dislike_count, created_at) 
+                                 VALUES ($a_id, $u_id, '$safe_c', $likes, $dislikes, NOW() - INTERVAL " . rand(5, 600) . " MINUTE)");
+        } else if ($chk_c && mysqli_num_rows($chk_c) > 0) {
+            $c_row = mysqli_fetch_assoc($chk_c);
+            mysqli_query($conn, "UPDATE comments SET user_id = $u_id, like_count = $likes, dislike_count = $dislikes WHERE id = " . $c_row['id']);
+        }
+    }
+}
+
+echo "<p style='color: green; font-weight: bold;'>[성공] 데이터베이스 구조 및 기사/댓글(좋아요/싫어요/성별/연령대)이 성공적으로 동기화되었습니다!</p>";
+echo "<p><a href='/index.php' style='display:inline-block; padding:10px 20px; background:#03c75a; color:#fff; text-decoration:none; border-radius:4px;'>메인 화면으로 이동하여 확인하기 →</a></p>";
+?>
