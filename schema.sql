@@ -1,6 +1,11 @@
 -- 뉴스 포털 데이터베이스 생성 및 테이블 정의
+SET NAMES 'utf8mb4';
+SET CHARACTER SET utf8mb4;
+
 CREATE DATABASE IF NOT EXISTS news_portal DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE news_portal;
+SET NAMES 'utf8mb4';
+
 
 -- 1. 회원 테이블 (일반회원: user, 기자: reporter, 최고관리자: admin)
 -- 성별(gender: M/F) 및 연령대(age_group: 10s, 20s, 30s, 40s, 50s, 60s)

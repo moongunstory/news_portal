@@ -1,4 +1,9 @@
 <?php
+// 문자셋 헤더 전송
+if (!headers_sent()) {
+    header('Content-Type: text/html; charset=UTF-8');
+}
+
 // 데이터베이스 설정 및 공통 세션 시작
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -39,7 +44,6 @@ foreach ($attempts as $attempt) {
             break;
         }
     } catch (Throwable $e) {
-        // 다음 연결 시도로 진행
         continue;
     }
 }
@@ -48,6 +52,11 @@ if (!$conn) {
     die("데이터베이스 연결 실패: MariaDB 서비스를 시작 중이거나 접근 권한을 확인해주세요.");
 }
 
-// 문자 인코딩 설정
+// 문자 인코딩 완전 일치 설정 (UTF-8)
 mysqli_set_charset($conn, "utf8mb4");
+@mysqli_query($conn, "SET NAMES 'utf8mb4'");
+@mysqli_query($conn, "SET CHARACTER SET utf8mb4");
+@mysqli_query($conn, "SET character_set_connection=utf8mb4");
+@mysqli_query($conn, "SET character_set_results=utf8mb4");
+@mysqli_query($conn, "SET character_set_client=utf8mb4");
 ?>

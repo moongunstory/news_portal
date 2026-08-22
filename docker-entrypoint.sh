@@ -20,7 +20,7 @@ for i in {1..30}; do
 done
 
 echo "[+] 4. 데이터베이스 및 계정 권한 설정 중..."
-mysql << 'EOF' || true
+mysql --default-character-set=utf8mb4 -u root << 'EOF' || true
 CREATE DATABASE IF NOT EXISTS news_portal DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- root 계정 패스워드 없이 접속 가능하도록 권한 설정
@@ -38,8 +38,8 @@ FLUSH PRIVILEGES;
 EOF
 
 if [ -f /var/www/html/schema.sql ]; then
-    echo "[+] 5. 테이블 스키마 초기화 중..."
-    mysql news_portal < /var/www/html/schema.sql 2>/dev/null || true
+    echo "[+] 5. 테이블 스키마 초기화 (UTF-8) 중..."
+    mysql --default-character-set=utf8mb4 -u root news_portal < /var/www/html/schema.sql 2>/dev/null || true
 fi
 
 # uploads 폴더 권한 확인
