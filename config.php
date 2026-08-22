@@ -4,7 +4,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// PHP 8.1+ 예외 크래시 방지
+// 에러 보고 수준 설정
 mysqli_report(MYSQLI_REPORT_OFF);
 
 $db_host = getenv('DB_HOST') ?: '127.0.0.1';
@@ -13,27 +13,41 @@ $db_pass = getenv('DB_PASS') !== false ? getenv('DB_PASS') : '';
 $db_name = getenv('DB_NAME') ?: 'news_portal';
 $db_port = getenv('DB_PORT') ? (int)getenv('DB_PORT') : 3306;
 
-// 1차: 환경변수/기본 설정으로 연결 시도
-$conn = @mysqli_connect($db_host, $db_user, $db_pass, $db_name, $db_port);
+$conn = null;
 
-// 2차: localhost root 연결 시도
-if (!$conn) {
-    $conn = @mysqli_connect('localhost', 'root', '', $db_name);
+// 연결 시도 목록 (환경변수 -> root -> news_user -> unix socket)
+$attempts = [
+    ['host' => $db_host, 'user' => $db_user, 'pass' => $db_pass, 'port' => $db_port],
+    ['host' => '127.0.0.1', 'user' => 'root', 'pass' => '', 'port' => 3306],
+    ['host' => 'localhost', 'user' => 'root', 'pass' => '', 'port' => 3306],
+    ['host' => '127.0.0.1', 'user' => 'news_user', 'pass' => 'news_pass', 'port' => 3306],
+    ['host' => 'localhost', 'user' => 'news_user', 'pass' => 'news_pass', 'port' => 3306],
+    ['host' => 'localhost:/var/run/mysqld/mysqld.sock', 'user' => 'root', 'pass' => '', 'port' => 3306],
+];
+
+foreach ($attempts as $attempt) {
+    try {
+        $test_conn = @mysqli_connect(
+            $attempt['host'],
+            $attempt['user'],
+            $attempt['pass'],
+            $db_name,
+            $attempt['port']
+        );
+        if ($test_conn && !mysqli_connect_errno()) {
+            $conn = $test_conn;
+            break;
+        }
+    } catch (Throwable $e) {
+        // 다음 연결 시도로 진행
+        continue;
+    }
 }
 
-// 3차: 전용 계정 news_user 연결 시도 (Docker 컨테이너 대비)
 if (!$conn) {
-    $conn = @mysqli_connect('127.0.0.1', 'news_user', 'news_pass', $db_name);
-}
-if (!$conn) {
-    $conn = @mysqli_connect('localhost', 'news_user', 'news_pass', $db_name);
-}
-
-if (!$conn) {
-    die("데이터베이스 연결 실패: " . mysqli_connect_error());
+    die("데이터베이스 연결 실패: MariaDB 서비스를 시작 중이거나 접근 권한을 확인해주세요.");
 }
 
 // 문자 인코딩 설정
 mysqli_set_charset($conn, "utf8mb4");
 ?>
-
