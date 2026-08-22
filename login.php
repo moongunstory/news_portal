@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/header.php';
+require_once __DIR__ . '/config.php';
 
 $error = '';
 
@@ -34,6 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = '아이디 또는 비밀번호가 올바르지 않습니다.';
     }
 }
+
+require_once __DIR__ . '/header.php';
 ?>
 
 <div class="content-left" style="max-width: 460px; margin: 40px auto;">

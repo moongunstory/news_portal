@@ -1,4 +1,9 @@
 <?php
+// 출력 버퍼링 활성화 (리다이렉트 헤더 오류 방지)
+if (!ob_get_level()) {
+    ob_start();
+}
+
 // 문자셋 헤더 전송
 if (!headers_sent()) {
     header('Content-Type: text/html; charset=UTF-8');

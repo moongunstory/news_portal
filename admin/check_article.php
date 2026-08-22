@@ -1,8 +1,12 @@
 <?php
-require_once __DIR__ . '/../header.php';
+require_once __DIR__ . '/../config.php';
+
+$is_logged_in = isset($_SESSION['user_id']);
+$current_role = $_SESSION['role'] ?? 'guest';
 
 // [접근 제어] 오직 최고 관리자(admin)만 접근 가능 (건너뛰기 방지)
 if (!$is_logged_in || $current_role !== 'admin') {
+    require_once __DIR__ . '/../header.php';
     echo "<div class='section-box' style='padding:40px; text-align:center; color:#c92a2a;'>";
     echo "<h3>최고 관리자 전용 구역</h3>";
     echo "<p style='margin-top:10px;'>최고 관리자 권한이 있는 계정만 접근할 수 있습니다.</p>";
@@ -19,6 +23,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'approve' && isset($_GET['id']
     header('Location: /admin/check_article.php');
     exit;
 }
+
+require_once __DIR__ . '/../header.php';
 
 // 승인 대기 중인 기사 목록 조회
 $pending_sql = "SELECT a.*, c.name AS category_name, u.name AS author_name, u.username AS author_user 
