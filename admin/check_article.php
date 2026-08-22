@@ -53,7 +53,12 @@ if ($view_id > 0) {
     <div class="section-box" style="padding: 30px;">
         <div class="section-title">
             <span>미승인 기사 검토 및 승인 데스크</span>
-            <span style="font-size: 13px; color: #e03131; font-weight: bold;">최고관리자 모드</span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <a href="/reset.php" onclick="return confirm('박기자(reporter01) 계정 권한을 [기자]로 되돌리고 대기 중인 실습 기사를 삭제하시겠습니까?');" style="background:#e03131; color:#fff; padding:4px 10px; border-radius:4px; font-size:12px; font-weight:bold; text-decoration:none;">
+                    🔄 3단계 실습 초기화 (박기자 권한 복구)
+                </a>
+                <span style="font-size: 13px; color: #e03131; font-weight: bold;">최고관리자 모드</span>
+            </div>
         </div>
 
         <?php if ($detail_article): ?>

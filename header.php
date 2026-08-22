@@ -27,6 +27,9 @@ $current_name = $_SESSION['name'] ?? '';
         </form>
 
         <div class="user-nav">
+            <a href="/reset.php" onclick="return confirm('박기자(reporter01) 계정 권한을 [기자]로 초기화하고 승인 대기 기사를 삭제하시겠습니까?');" style="background:#e03131; color:#fff; padding:4px 9px; border-radius:4px; font-size:12px; font-weight:bold; text-decoration:none; display:inline-flex; align-items:center; gap:4px; margin-right:4px;" title="박기자 권한 및 대기 기사 초기화">
+                🔄 실습 초기화
+            </a>
             <?php if ($is_logged_in): ?>
                 <span class="user-badge"><?php 
                     if ($current_role === 'admin') echo '최고관리자';
