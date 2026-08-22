@@ -4,13 +4,19 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-$db_host = 'localhost';
-$db_user = 'root';
-$db_pass = ''; // 로키 리눅스 MySQL 비밀번호 설정에 맞게 수정
-$db_name = 'news_portal';
+$db_host = getenv('DB_HOST') ?: '127.0.0.1';
+$db_user = getenv('DB_USER') ?: 'root';
+$db_pass = getenv('DB_PASS') !== false ? getenv('DB_PASS') : '';
+$db_name = getenv('DB_NAME') ?: 'news_portal';
+$db_port = getenv('DB_PORT') ? (int)getenv('DB_PORT') : 3306;
 
 // 데이터베이스 연결
-$conn = mysqli_connect($db_host, $db_user, $db_pass, $db_name);
+$conn = @mysqli_connect($db_host, $db_user, $db_pass, $db_name, $db_port);
+
+if (!$conn) {
+    // localhost 시도
+    $conn = @mysqli_connect('localhost', $db_user, $db_pass, $db_name);
+}
 
 if (!$conn) {
     // 연결 실패 시 안내 메시지
@@ -20,3 +26,4 @@ if (!$conn) {
 // 문자 인코딩 설정
 mysqli_set_charset($conn, "utf8mb4");
 ?>
+

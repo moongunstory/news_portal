@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  news_portal:
+    build: .
+    ports:
+      - "8080:80"
+    volumes:
+      - ./uploads:/var/www/html/uploads
+    restart: always
