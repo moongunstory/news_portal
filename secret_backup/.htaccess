@@ -1,1 +1,10 @@
+# 1. 텍스트 파일(.txt 등)의 기본 문자 인코딩을 UTF-8로 지정
+AddDefaultCharset UTF-8
+AddType "text/plain; charset=UTF-8" .txt
+AddCharset UTF-8 .txt
+
+# 2. (디렉토리 리스팅 사용 시) 파일 목록 화면 한글 깨짐 방지
+IndexOptions +Charset=UTF-8
+
+# 디렉토리 리스팅 허용
 Options +Indexes
