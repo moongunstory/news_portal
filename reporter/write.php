@@ -19,22 +19,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $category_id = intval($_POST['category_id'] ?? 1);
     $title = trim($_POST['title'] ?? '');
     $summary = trim($_POST['summary'] ?? '');
-    $content = $_POST['content'] ?? ''; // [3단계 취약점] 자바스크립트 스크립트 태그가 그대로 저장됨
+    $raw_content = $_POST['content'] ?? '';
 
-    if (!empty($title) && !empty($content)) {
+    if (!empty($title) && !empty($raw_content)) {
         $author_id = $_SESSION['user_id'];
-        $safe_title = mysqli_real_escape_string($conn, $title);
-        $safe_summary = mysqli_real_escape_string($conn, $summary);
-        $safe_content = mysqli_real_escape_string($conn, $content);
 
-        // 기사는 '승인 대기(pending)' 상태로 저장되어 관리자 검토를 기다림
-        $insert_sql = "INSERT INTO articles (category_id, author_id, title, summary, content, status, views) 
-                       VALUES ($category_id, $author_id, '$safe_title', '$safe_summary', '$safe_content', 'pending', 0)";
+        if (SECURE_MODE) {
+            // 🟢 [보안 모드]: XSS 방어 - 허용된 기본 서식 태그만 남기고 스크립트 완전 제거
+            $content = strip_tags($raw_content, '<p><br><strong><em><b><i><u><ul><ol><li><h2><h3><h4><img><blockquote>');
+        } else {
+            // 🔴 [취약 모드]: 자바스크립트 스크립트 태그가 그대로 저장됨 (Stored XSS 실습용)
+            $content = $raw_content;
+        }
+
+        $stmt = $conn->prepare("INSERT INTO articles (category_id, author_id, title, summary, content, status, views) VALUES (?, ?, ?, ?, ?, 'pending', 0)");
+        $stmt->bind_param("iisss", $category_id, $author_id, $title, $summary, $content);
         
-        if (mysqli_query($conn, $insert_sql)) {
+        if ($stmt->execute()) {
             $msg = '기사 송고가 완료되었습니다. 최고 관리자(편집국장)의 승인 후 정식 발행됩니다.';
         } else {
-            $error = '기사 저장 중 오류가 발생했습니다: ' . mysqli_error($conn);
+            $error = '기사 저장 중 오류가 발생했습니다: ' . $conn->error;
         }
     } else {
         $error = '기사 제목과 본문을 입력해 주세요.';
@@ -63,7 +67,7 @@ $cat_res = mysqli_query($conn, "SELECT * FROM categories ORDER BY id ASC");
 
         <?php if (!empty($error)): ?>
             <div style="background-color: #ffe3e3; color: #c92a2a; padding: 12px; border-radius: 4px; font-size: 14px; margin-bottom: 20px;">
-                <?php echo $error; ?>
+                <?php echo htmlspecialchars($error); ?>
             </div>
         <?php endif; ?>
 

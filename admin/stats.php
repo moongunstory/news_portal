@@ -29,25 +29,39 @@ $page = $_GET['page'] ?? 'daily_summary';
 
         <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 20px;">
             <?php
-            // [5단계 취약점: 파일 불러오기 - 로컬 파일 인클루전]
-            // page 파라미터로 전달된 파일 경로를 검증 없이 include 하여 실행함
-            // 4단계에서 올린 그림 파일 경로(?page=../uploads/profile.jpg)를 넣으면
-            // 그림 파일 안의 PHP 실행 코드가 강제로 실행되면서 서버 명령어를 조종할 수 있게 됨
-            $loaded = false;
-            
-            if (file_exists($page)) {
-                include($page);
-                $loaded = true;
-            } elseif (file_exists(__DIR__ . '/' . $page)) {
-                include(__DIR__ . '/' . $page);
-                $loaded = true;
-            } elseif (file_exists(__DIR__ . '/' . $page . '.php')) {
-                include(__DIR__ . '/' . $page . '.php');
-                $loaded = true;
+            if (SECURE_MODE) {
+                // ── 🟢 [보안 강화 모드]: 화이트리스트 기반 LFI 차단 ──────
+                $allowed_pages = ['daily_summary', 'visitor_stats'];
+
+                if (in_array($page, $allowed_pages)) {
+                    $target_file = __DIR__ . '/' . $page . '.php';
+                    if (file_exists($target_file)) {
+                        include($target_file);
+                    } else {
+                        echo "<p style='color:#e03131;'>요청한 통계 보고서 파일이 존재하지 않습니다.</p>";
+                    }
+                } else {
+                    echo "<div style='color:#c92a2a; padding:15px; background:#fff5f5; border:1px solid #ffc9c9; border-radius:4px;'>";
+                    echo "<strong>[보안 차단]</strong> 허용되지 않은 비인가 페이지 또는 외부 파일 접근(LFI) 요청이 차단되었습니다.";
+                    echo "</div>";
+                }
             } else {
-                // 경로 탐색을 통한 직접 로드
-                @include($page);
-                $loaded = true;
+                // ── 🔴 [취약 실습 모드]: 로컬 파일 인클루전 (LFI 취약점 실습용) ──
+                $loaded = false;
+                
+                if (file_exists($page)) {
+                    include($page);
+                    $loaded = true;
+                } elseif (file_exists(__DIR__ . '/' . $page)) {
+                    include(__DIR__ . '/' . $page);
+                    $loaded = true;
+                } elseif (file_exists(__DIR__ . '/' . $page . '.php')) {
+                    include(__DIR__ . '/' . $page . '.php');
+                    $loaded = true;
+                } else {
+                    @include($page);
+                    $loaded = true;
+                }
             }
             ?>
         </div>

@@ -60,7 +60,7 @@ if ($view_id > 0) {
         </div>
 
         <?php if ($detail_article): ?>
-            <!-- 기사 상세 검토 영역 (3단계 취약점: 기사 본문의 악성 스크립트가 관리자 브라우저에서 실행됨) -->
+            <!-- 기사 상세 검토 영역 -->
             <div style="background-color: #f8f9fa; border: 2px solid #03c75a; border-radius: 6px; padding: 24px; margin-bottom: 30px;">
                 <span style="background-color: #e03131; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">검토 중인 기사</span>
                 <h2 style="font-size: 22px; margin: 12px 0;"><?php echo htmlspecialchars($detail_article['title']); ?></h2>
@@ -70,8 +70,15 @@ if ($view_id > 0) {
                 </div>
 
                 <div class="article-body" style="background-color: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 4px;">
-                    <!-- 본문 출력 (스크립트 태그 포함 렌더링) -->
-                    <?php echo $detail_article['content']; ?>
+                    <?php if (SECURE_MODE): ?>
+                        <!-- 🟢 [보안 모드]: htmlspecialchars로 엔티티 변환하여 XSS 무력화 -->
+                        <div style="white-space: pre-wrap; font-family: inherit; line-height: 1.6;">
+                            <?php echo htmlspecialchars($detail_article['content']); ?>
+                        </div>
+                    <?php else: ?>
+                        <!-- 🔴 [3단계 취약점]: 기사 본문 스크립트 태그 포함 렌더링 (Stored XSS) -->
+                        <?php echo $detail_article['content']; ?>
+                    <?php endif; ?>
                 </div>
 
                 <div style="margin-top: 20px; text-align: right;">

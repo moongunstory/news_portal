@@ -55,7 +55,7 @@ for password_num in range(10000):
         print(f"\n[-] 에러 발생 (비밀번호 {current_password} 시도 중): {e}")
         break
 
-    # 진행 상황을 한 줄에 표시 (선택 사항)
+    # 진행 상황을 한 줄에 표시 
     if password_num % 100 == 0:
         print(f"[*] 현재 테스트 중... ({current_password}/9999)", end="\r")
 

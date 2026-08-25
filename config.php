@@ -14,6 +14,11 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// CSRF 토큰 초기화 (세션에 없으면 생성)
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(16));
+}
+
 // 에러 보고 수준 설정
 mysqli_report(MYSQLI_REPORT_OFF);
 
@@ -64,4 +69,25 @@ mysqli_set_charset($conn, "utf8mb4");
 @mysqli_query($conn, "SET character_set_connection=utf8mb4");
 @mysqli_query($conn, "SET character_set_results=utf8mb4");
 @mysqli_query($conn, "SET character_set_client=utf8mb4");
+
+// ── 보안 모드 및 계정 잠금 테이블/컬럼 자동 생성 ─────────────────
+@mysqli_query($conn, "CREATE TABLE IF NOT EXISTS site_settings (
+    id INT PRIMARY KEY,
+    secure_mode TINYINT(1) DEFAULT 0
+)");
+
+// 기본 레코드 없을 시 삽입
+@mysqli_query($conn, "INSERT IGNORE INTO site_settings (id, secure_mode) VALUES (1, 0)");
+
+// users 테이블에 login_fail_count, lockout_time 컬럼 추가 (없을 경우)
+$chk_fail = @mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'login_fail_count'");
+if ($chk_fail && mysqli_num_rows($chk_fail) == 0) {
+    @mysqli_query($conn, "ALTER TABLE users ADD COLUMN login_fail_count INT DEFAULT 0 AFTER age_group");
+    @mysqli_query($conn, "ALTER TABLE users ADD COLUMN lockout_time DATETIME DEFAULT NULL AFTER login_fail_count");
+}
+
+// ── 보안 모드(SECURE_MODE) 상수 정의 ───────────────────────────
+$mode_query = @mysqli_query($conn, "SELECT secure_mode FROM site_settings WHERE id = 1");
+$mode_row = $mode_query ? mysqli_fetch_assoc($mode_query) : null;
+define('SECURE_MODE', ($mode_row && (int)$mode_row['secure_mode'] === 1));
 ?>

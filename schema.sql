@@ -17,8 +17,17 @@ CREATE TABLE IF NOT EXISTS users (
     role ENUM('user', 'reporter', 'admin') DEFAULT 'user',
     gender ENUM('M', 'F') DEFAULT 'M',
     age_group ENUM('10s', '20s', '30s', '40s', '50s', '60s') DEFAULT '20s',
+    login_fail_count INT DEFAULT 0,
+    lockout_time DATETIME DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 사이트 보안 모드 설정 테이블
+CREATE TABLE IF NOT EXISTS site_settings (
+    id INT PRIMARY KEY,
+    secure_mode TINYINT(1) DEFAULT 0
+);
+INSERT IGNORE INTO site_settings (id, secure_mode) VALUES (1, 0);
 
 -- 초기 계정 추가 (다양한 성별/연령대 독자 포함)
 INSERT INTO users (username, password, name, role, gender, age_group) VALUES 

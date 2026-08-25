@@ -1,0 +1,195 @@
+case 1. 디렉토리 리스팅 (서버 폴더 내용 노출)
+
+- 취약점 설명:
+  주소창에 폴더 경로(/uploads 등)를 입력했을 때, 폴더 안에 있는 파일 목록이 인터넷 창에 그대로 다 보이는 문제입니다.
+
+- 해결 방안:
+  **웹 서버 설정 변경 (파일 목록 보기 끄기)**
+  서버 설정 파일에서 `Indexes` 기능 앞에 마이너스(`-`)를 붙여서 파일 목록이 브라우저에 표시되지 않고 '접근 금지'가 뜨도록 차단합니다.
+
+  ```apache
+  <Directory "/var/www/html/uploads">
+      Options -Indexes
+      AllowOverride None
+      Require all granted
+  </Directory>
+  ```
+
+
+case 2. SQL 인젝션 (데이터베이스 조작 공격)
+
+- 취약점 설명:
+  로그인 창에 `' OR '1'='1` 같은 데이터베이스 문법 기호를 넣어서 비밀번호를 몰라도 로그인을 뚫어버리는 공격입니다.
+
+- 해결 방안:
+  - **파라미터화 쿼리 (Prepared Statement) 적용:**
+    사용자가 입력한 글자를 '명령어'로 취급하지 않고, 단순한 '순수 글자 데이터'로만 안전하게 처리하도록 쿼리 구조를 완전히 분리합니다.
+    
+    ```php
+    // 안전한 코딩 적용 예시
+    $stmt = $conn->prepare("SELECT * FROM users WHERE username = ? AND password = ?");
+    $stmt->bind_param("ss", $username, $password);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    ```
+    
+  - **특수문자 필터링:** 따옴표(`'`), 샵(`#`), 세미콜론(`;`) 같은 위험한 기호를 걸러냅니다.
+
+
+case 3. 브루트포스 (비밀번호 무차별 대입 공격)
+
+- 취약점 설명:
+  파이썬 프로그램 등을 이용해 0000부터 9999까지 비밀번호를 1초에 수백 번씩 마구 대입해서 알아내는 공격입니다.
+
+- 해결 방안:
+  - **계정 잠금 정책 적용 (5회 틀리면 10분 정지):**
+    
+    ### 1. DB 구조 변경 (실패 횟수, 잠금 시간 기록용 컬럼 추가)
+    ```sql
+    ALTER TABLE users
+    ADD COLUMN login_fail_count INT DEFAULT 0,
+    ADD COLUMN lockout_time DATETIME DEFAULT NULL;
+    ```
+    
+    ### 2. login.php 처리 로직 (잠금 검사 및 실패 횟수 증가)
+    ```php
+    // 1. 현재 계정이 잠겨있는지 확인
+    $user_stmt = $conn->prepare("SELECT id, username, name, role, gender, age_group, password, login_fail_count, lockout_time FROM users WHERE username = ?");
+    $user_stmt->bind_param("s", $username);
+    $user_stmt->execute();
+    $user = $user_stmt->get_result()->fetch_assoc();
+    
+    if ($user) {
+        // 이미 5회 틀려서 잠긴 상태인지 확인 (잠긴 지 10분이 안 지남)
+        if ($user['lockout_time'] && strtotime($user['lockout_time']) > (time() - 600)) {
+            $remaining = ceil((strtotime($user['lockout_time']) + 600 - time()) / 60);
+            $error = "비밀번호 5회 오류로 계정이 잠겼습니다. {$remaining}분 후 다시 시도하세요.";
+        } else {
+            // 비밀번호 일치 확인
+            if ($password === $user['password']) {
+                // [성공] 틀린 횟수 및 잠금 시간 초기화
+                $reset_stmt = $conn->prepare("UPDATE users SET login_fail_count = 0, lockout_time = NULL WHERE id = ?");
+                $reset_stmt->bind_param("i", $user['id']);
+                $reset_stmt->execute();
+    
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['username'] = $user['username'];
+                $_SESSION['name'] = $user['name'];
+                $_SESSION['role'] = $user['role'];
+                // ... 로그인 성공 처리
+            } else {
+                // [실패] 틀린 횟수 1 증가
+                $new_fail_count = $user['login_fail_count'] + 1;
+    
+                if ($new_fail_count >= 5) {
+                    // 5번 틀리면 10분간 잠금 (현재 시간 기록)
+                    $lock_stmt = $conn->prepare("UPDATE users SET login_fail_count = ?, lockout_time = NOW() WHERE id = ?");
+                    $lock_stmt->bind_param("ii", $new_fail_count, $user['id']);
+                    $lock_stmt->execute();
+                    $error = "비밀번호를 5회 틀려 계정이 10분간 잠깁니다.";
+                } else {
+                    // 5회 미만이면 틀린 횟수만 기록
+                    $fail_stmt = $conn->prepare("UPDATE users SET login_fail_count = ? WHERE id = ?");
+                    $fail_stmt->bind_param("ii", $new_fail_count, $user['id']);
+                    $fail_stmt->execute();
+                    $error = "비밀번호가 올바르지 않습니다. (틀린 횟수: {$new_fail_count}/5)";
+                }
+            }
+        }
+    } else {
+        $error = "아이디 또는 비밀번호가 올바르지 않습니다.";
+    }
+    ```
+
+  - **자동 입력 방지문자 (CAPTCHA) 적용:**
+    사람이 직접 보고 입력해야 하는 보안 문자를 띄워 컴퓨터 프로그램(봇)의 자동 대입을 차단합니다.
+    
+    ```html
+    <form action="/login.php" method="POST">
+        <div class="form-group">
+            <label for="username">아이디</label>
+            <input type="text" id="username" name="username" class="form-control" placeholder="아이디를 입력하세요" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="password">비밀번호</label>
+            <input type="password" id="password" name="password" class="form-control" placeholder="비밀번호를 입력하세요" required>
+        </div>
+    
+        <!-- 🟢 자동 입력 방지문자 (CAPTCHA) 입력란 -->
+        <div class="form-group" style="margin-top: 15px;">
+            <label for="captcha">자동 입력 방지문자</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 8px; align-items: center;">
+                <img src="/captcha_image.php" onclick="this.src='/captcha_image.php?r='+Math.random()" alt="보안문자" style="border: 1px solid #ccc; height: 38px; cursor: pointer;" title="클릭하면 글자가 바뀝니다">
+                <span style="font-size: 12px; color: #888;">(글자가 안 보이면 이미지를 클릭하세요)</span>
+            </div>
+            <input type="text" id="captcha" name="captcha_code" class="form-control" placeholder="위 그림의 문자를 입력하세요" required>
+        </div>
+    
+        <button type="submit" class="btn-primary" style="width: 100%; padding: 12px; margin-top: 10px; font-size: 15px;">
+            로그인
+        </button>
+    </form>
+    ```
+
+  - **비밀번호 규칙 강화:** 단순 숫자 4자리가 아닌, 영문+숫자+특수문자 조합 8자리 이상을 쓰도록 강제합니다.
+
+
+case 4. Stored XSS (악성 스크립트 저장 및 실행)
+
+- 취약점 설명:
+  기사 내용이나 댓글에 악성 자바스크립트 코드(`<script>...</script>`)를 써서 올리면, 그 글을 읽는 다른 사람(관리자 등)의 브라우저에서 강제로 악성 코드가 실행되는 공격입니다.
+
+- 해결 방안:
+  **화면 출력 시 특수기호 변환 (`htmlspecialchars`)**
+  글 내용을 화면에 보여줄 때 `<` 기호를 `&lt;`로, `>` 기호를 `&gt;`로 변환하여 브라우저가 이를 '실행할 프로그램 코드'가 아닌 '단순 글자'로만 표시하게 만듭니다.
+
+
+case 5. CSRF (관리자 권한 도용 및 요청 위조)
+
+- 취약점 설명:
+  관리자가 로그인되어 있는 틈을 타서 악성 링크를 누르게 만들어, 관리자 몰래 일반 사용자를 최고 관리자로 승격시키는 공격입니다.
+
+- 해결 방안:
+  - **일회용 인증 토큰 (Anti-CSRF Token) 사용:**
+    권한을 변경할 때 서버가 발급한 비밀 암호 토큰(랜덤 문자열)을 함께 제출하도록 만들어, 외부 사이트에서 몰래 보낸 가짜 요청을 차단합니다.
+  - 주소창 링크(GET) 방식으로는 중요한 변경을 못 하게 막고, 오직 정상적인 화면 버튼(POST)으로만 처리되도록 제한합니다.
+
+
+case 6. 파일 업로드 취약점 (악성 웹쉘 파일 업로드 방어)
+
+- 취약점 설명:
+  해커가 사진 파일인 척 위장하여 서버를 원격 조종할 수 있는 악성 프로그램(웹쉘 코드)을 서버에 업로드하는 공격입니다.
+
+- 해결 방안:
+  - **화이트리스트 기반 확장자 검증:**
+    허용된 파일 확장자(`jpg`, `png`, `gif` 등)만 업로드를 허용하고, 실행 가능한 확장자(`php`, `jsp`, `asp`, `cgi` 등)는 전면 차단.
+  - **업로드 디렉터리 실행 권한 제거 (가장 중요):**
+    `uploads/` 폴더 내에서는 웹 스크립트 파일이 실행되지 않도록 웹 서버 설정(Apache `.htaccess` 설정) 적용.
+  - **파일명 난수화 및 웹 루트 외부 저장:**
+    업로드된 파일명을 추측 불가능한 난수(UUID 등)로 변경하여 저장.
+  - **이미지 재생성 (추가 보완책):**
+    GD 라이브러리로 이미지를 새로 다시 그려서 저장하여 파일 내 숨겨진 악성 코드를 완전 제거.
+
+
+case 7. LFI을 통한 RCE (로컬 파일 포함 취약점을 통한 해킹 코드 실행)
+
+- 취약점 설명:
+  통계 페이지(`stats.php?page=...`)에서 경로를 검사하지 않고 파일을 불러오는 허점을 이용해, `../uploads/악성사진.jpg`를 억지로 불러와서 해킹 코드를 실행시키는 공격입니다.
+
+- 해결 방안:
+  - **화이트리스트(Whitelist) 기반 검증:**
+    불러올 수 있는 파일 목록을 서버에 미리 지정해 두고, 허용된 파일명만 `include` 하도록 제한.
+    
+    ```php
+    // 안전한 파일 불러오기 예시
+    $allowed_pages = ['daily_summary', 'visitor_stats'];
+    $page = $_GET['page'] ?? 'daily_summary';
+
+    if (in_array($page, $allowed_pages)) {
+        include __DIR__ . '/' . $page . '.php';
+    } else {
+        die("접근할 수 없는 잘못된 페이지 요청입니다.");
+    }
+    ```
+  - **경로 조작 문자(`../`, `..\`) 필터링**

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/config.php';
 
 // ── 비밀 토큰 검증 ──────────────────────────────────────────────
@@ -18,13 +18,23 @@ if ($token !== RESET_SECRET) {
     exit;
 }
 
-// ── 1. reporter01 계정 권한/비밀번호 초기화 ──────────────────────
-mysqli_query($conn, "UPDATE users SET role = 'reporter', password = '2026' WHERE username = 'reporter01'");
+// ── 1. reporter01 계정 권한/비밀번호 및 잠금 초기화 ─────────────
+mysqli_query($conn, "UPDATE users SET role = 'reporter', password = '2026', login_fail_count = 0, lockout_time = NULL WHERE username = 'reporter01'");
 
-// ── 2. 최고관리자 권한 유지 확인 ─────────────────────────────────
+// ── 2. 최고관리자 권한 유지 확인 및 모든 계정 잠금 해제 ────────
 mysqli_query($conn, "UPDATE users SET role = 'admin' WHERE username = 'admin_master'");
+mysqli_query($conn, "UPDATE users SET login_fail_count = 0, lockout_time = NULL");
 
-// ── 3. 컷오프 이후에 작성된 기사만 삭제 (초기 기사 보존) ──────────
+// ── 3. 기본 모드를 취약 실습 모드(0)로 복귀 ─────────────────────
+mysqli_query($conn, "UPDATE site_settings SET secure_mode = 0 WHERE id = 1");
+
+// ── 4. 업로드 디렉터리 .htaccess 제거 (실습 환경 복원) ───────────
+$uploads_htaccess = __DIR__ . '/uploads/.htaccess';
+if (file_exists($uploads_htaccess)) {
+    @unlink($uploads_htaccess);
+}
+
+// ── 5. 컷오프 이후에 작성된 기사만 삭제 (초기 기사 보존) ──────────
 $cutoff = PRACTICE_CUTOFF;
 
 // 댓글 반응 연쇄 삭제
@@ -48,7 +58,7 @@ mysqli_query($conn, "
 $del = mysqli_query($conn, "DELETE FROM articles WHERE created_at > '$cutoff'");
 $deleted_count = mysqli_affected_rows($conn);
 
-// ── 4. 초기 기사가 하나도 없으면 복구 ────────────────────────────
+// ── 6. 초기 기사가 하나도 없으면 복구 ────────────────────────────
 $cnt = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as cnt FROM articles"))['cnt'];
 if ($cnt == 0) {
     // reporter01(id=7) 기사 전체 복구
@@ -72,7 +82,7 @@ if ($cnt == 0) {
      'news_society.jpg', 77777, 'approved', NOW() - INTERVAL 18 HOUR),
     (4, 7, '[속보] 167년 수학계 난제 ''리만 가설'' 마침내 풀렸다... 인천 검단구 사는 보안 인프라 14기 수강생 문건 씨, 필즈상 만장일치 수상',
      '세계수학자연맹(IMU) 총회 기립 박수...\"외계인이 인간의 뇌를 빌려 쓴 수준\". 정작 본인은 \"카페에서 와이파이 기다리다 심심해서 끄적였을 뿐\"',
-     '<p>1859년 발표 이후 장장 167년 동안 전 세계 석학들을 좌절케 했던 인류 최악의 수학 난제 리만 가설(Riemann Hypothesis)이 마침내 완벽히 증명되었습니다.</p><p>국제수학연맹(IMU)은 인천 검단구에 사는 보안 인프라 14기 수강생 문건 씨가 제출한 12페이지 분량의 증명 논문을 만장일치로 통과시키며, 수학계 최고의 영예인 필즈상 수상을 공식 발표했습니다.</p><p>심사위원단 대표는 \"논문을 검토하는 내내 아름다움에 숨이 멎을 뻔했다. 인간의 한계를 초월한 직관\"이라며 극찬을 아끼지 않았습니다.</p><p>한편 수상 소감을 묻는 인터뷰에서 문건 씨는 \"동네 카페에서 아이스 아메리카노를 주문하고 와이파이 연결을 기다리던 중 심심해서 냅킨에 끄적였던 낙서가 이렇게 커질 줄 몰랐다\"고 덤덤히 밝혀 전 세계 수학자들에게 깊은 경외와 좌절을 동시에 안겨주었습니다.</p>',
+     '<p>1859년 발표 이후 장장 167년 동안 전 세계 석학들을 좌절케 했던 인류 최악의 수학 난제 리만 가설(Riemann Hypothesis)이 마침내 완벽히 증명되었습니다.</p><p>국제수학연맹(IMU)은 인천 검단구에 사는 보안 인프라 14기 수강생 문건 씨가 제출한 12페이지 분량의 증명 논문을 만장일치로 통과시키며, 수학계 최고의 영예인 필즈상 수상을 공식 발표했습니다.</p><p>심사위원단 대표는 \"논문을 검토하는 내내 아름다움에 숨이멎을 뻔했다. 인간의 한계를 초월한 직관\"이라며 극찬을 아끼지 않았습니다.</p><p>한편 수상 소감을 묻는 인터뷰에서 문건 씨는 \"동네 카페에서 아이스 아메리카노를 주문하고 와이파이 연결을 기다리던 중 심심해서 냅킨에 끄적였던 낙서가 이렇게 커질 줄 몰랐다\"고 덤덤히 밝혀 전 세계 수학자들에게 깊은 경외와 좌절을 동시에 안겨주었습니다.</p>',
      'news_tech.jpg', 42100, 'approved', NOW() - INTERVAL 15 HOUR),
     (5, 7, '[종합] 한국인 최초 노벨 문학상 수상에 빛나는 ''문건'' 작가... 스웨덴 한림원 \"시대의 영혼을 꿰뚫은 압도적 필력\"',
      '전 세계를 뒤흔든 역작 육식주의자와 너 혼자만 레벨업... 120개국 번역 출간 및 교보문고 새벽 오픈런 행렬',
@@ -113,18 +123,18 @@ if ($cnt == 0) {
     ");
 }
 
-// ── 5. 세션 role 즉시 갱신 ──────────────────────────────────────
+// ── 7. 세션 role 즉시 갱신 ──────────────────────────────────────
 if (isset($_SESSION['username']) && $_SESSION['username'] === 'reporter01') {
     $_SESSION['role'] = 'reporter';
 }
 
-// ── 6. 리다이렉트 ─────────────────────────────────────────────
+// ── 8. 리다이렉트 ─────────────────────────────────────────────
 $redirect = $_GET['redirect'] ?? '/index.php';
 if (!is_string($redirect) || substr($redirect, 0, 1) !== '/' || substr($redirect, 0, 2) === '//') {
     $redirect = '/index.php';
 }
 
-$alert_msg = "실습 초기화 완료\n\n박기자(reporter01) 권한: [기자]로 복구 / 비밀번호: 2026\n실습 기사 {$deleted_count}건 삭제 (2026-08-24 19:04 KST 이후 작성분)";
+$alert_msg = "실습 초기화 완료\n\n- 박기자(reporter01) 권한: [기자]로 복구 / 비밀번호: 2026\n- 모든 계정 잠금 해제 및 취약 실습 모드로 복원\n- 실습 기사 {$deleted_count}건 삭제 (초기 기사 보존)";
 echo "<script>alert(" . json_encode($alert_msg) . "); location.href=" . json_encode($redirect) . ";</script>";
 exit;
 ?>
