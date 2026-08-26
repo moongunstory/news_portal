@@ -26,6 +26,12 @@ if (file_exists($uploads_htaccess)) {
     @unlink($uploads_htaccess);
 }
 
+// ── 루트 디렉터리의 .htaccess 제거 (디렉토리 리스팅 차단 해제) ────
+$root_htaccess = __DIR__ . '/.htaccess';
+if (file_exists($root_htaccess)) {
+    @unlink($root_htaccess);
+}
+
 $redirect = $_GET['redirect'] ?? '/index.php';
 if (!is_string($redirect) || substr($redirect, 0, 1) !== '/' || substr($redirect, 0, 2) === '//') {
     $redirect = '/index.php';

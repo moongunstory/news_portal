@@ -90,4 +90,12 @@ if ($chk_fail && mysqli_num_rows($chk_fail) == 0) {
 $mode_query = @mysqli_query($conn, "SELECT secure_mode FROM site_settings WHERE id = 1");
 $mode_row = $mode_query ? mysqli_fetch_assoc($mode_query) : null;
 define('SECURE_MODE', ($mode_row && (int)$mode_row['secure_mode'] === 1));
+
+// ── 보안 모드 ON 시: HTML 주석 자동 제거 (소스코드 노출 방지) ────
+if (SECURE_MODE) {
+    ob_start(function($buffer) {
+        // HTML 주석 제거 (<!-- ... --> 패턴, 멀티라인 포함)
+        return preg_replace('/<!--.*?-->/s', '', $buffer);
+    });
+}
 ?>

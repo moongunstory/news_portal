@@ -133,7 +133,6 @@ require_once __DIR__ . '/header.php';
             </div>
 
             <?php if (SECURE_MODE): ?>
-                <!-- 🟢 보안 모드 전용 CAPTCHA (자동 입력 방지 문자) -->
                 <div class="form-group" style="margin-top: 15px;">
                     <label for="captcha">자동 입력 방지문자 <span style="color:#e03131;">*</span></label>
                     <div style="display: flex; gap: 10px; margin-bottom: 8px; align-items: center;">

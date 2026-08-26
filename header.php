@@ -19,19 +19,7 @@ $current_name = $_SESSION['name'] ?? '';
         <div class="logo-area" style="display: flex; align-items: center; gap: 12px;">
             <a href="/index.php" class="logo">DAILY NEWS</a>
             <span class="logo-sub">뉴스 홈</span>
-            
-            <!-- 🟢/🔴 보안 모드 스위치 상태 배지 -->
-            <?php if (SECURE_MODE): ?>
-                <a href="/secure_off.php?key=security2026reset" onclick="return confirm('🔴 취약 실습 모드로 전환하시겠습니까?');" style="display:inline-flex; align-items:center; gap:4px; background:#ebfbee; color:#2b8a3e; border:1px solid #b2f2bb; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:bold; text-decoration:none;" title="클릭 시 취약 실습 모드로 전환">
-                    <span>🟢 보안 강화 ON</span>
-                    <span style="font-size:9px; color:#666;">(클릭시 OFF)</span>
-                </a>
-            <?php else: ?>
-                <a href="/secure_on.php?key=security2026reset" onclick="return confirm('🟢 보안 강화 모드로 전환하시겠습니까?');" style="display:inline-flex; align-items:center; gap:4px; background:#fff5f5; color:#e03131; border:1px solid #ffc9c9; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:bold; text-decoration:none;" title="클릭 시 보안 강화 모드로 전환">
-                    <span>🔴 취약 실습 ON</span>
-                    <span style="font-size:9px; color:#888;">(클릭시 ON)</span>
-                </a>
-            <?php endif; ?>
+
         </div>
 
         <form action="/index.php" method="GET" class="search-box">
