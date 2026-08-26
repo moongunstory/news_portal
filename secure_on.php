@@ -35,10 +35,11 @@ $htaccess_content = "# 보안 모드: 업로드 디렉터리 내 PHP 스크립�
                   . "AddType text/plain .php .phtml\n";
 @file_put_contents($uploads_dir . '/.htaccess', $htaccess_content);
 
-// ── 루트 디렉터리에 .htaccess 생성 (디렉토리 리스팅 전면 차단) ────
-$root_htaccess_content = "# 보안 모드: 디렉토리 리스팅 전면 차단\n"
-                       . "Options -Indexes\n";
-@file_put_contents(__DIR__ . '/.htaccess', $root_htaccess_content);
+// ── 루트 디렉터리의 .htaccess 제거 (Apache 기본 -Indexes로 복귀 → 디렉토리 리스팅 차단) ──
+$root_htaccess = __DIR__ . '/.htaccess';
+if (file_exists($root_htaccess)) {
+    @unlink($root_htaccess);
+}
 
 $redirect = $_GET['redirect'] ?? '/index.php';
 if (!is_string($redirect) || substr($redirect, 0, 1) !== '/' || substr($redirect, 0, 2) === '//') {
