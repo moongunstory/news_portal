@@ -35,7 +35,7 @@ $htaccess_content = "# 보안 모드: 업로드 디렉터리 내 PHP 스크립�
                   . "AddType text/plain .php .phtml\n";
 @file_put_contents($uploads_dir . '/.htaccess', $htaccess_content);
 
-// ── 루트 디렉터리의 .htaccess 제거 (Apache 기본 -Indexes로 복귀 → 디렉토리 리스팅 차단) ──
+// ── 루트 디렉터리의 불필요한 .htaccess가 남아있다면 제거 ──────────────
 $root_htaccess = __DIR__ . '/.htaccess';
 if (file_exists($root_htaccess)) {
     @unlink($root_htaccess);
@@ -54,7 +54,7 @@ $alert_msg = "🟢 [보안 강화 모드 (Secure Mode) ON]\n\n"
            . "5. CSRF 차단 (Anti-CSRF 토큰 검증 + POST 강제)\n"
            . "6. 웹쉘 업로드 차단 (MIME 검사, 이미지 재생성, 실행권한 제거)\n"
            . "7. LFI 차단 (화이트리스트 파일 인클루전 제한)\n"
-           . "8. 디렉토리 리스팅 차단 (Options -Indexes 적용)\n"
+           . "8. 디렉토리 리스팅 차단 (/secret_backup/ 등 접근 차단)\n"
            . "9. 소스코드 주석 제거 (HTML 주석 자동 스트리핑)";
 
 echo "<script>alert(" . json_encode($alert_msg) . "); location.href=" . json_encode($redirect) . ";</script>";

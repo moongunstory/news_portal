@@ -26,10 +26,11 @@ if (file_exists($uploads_htaccess)) {
     @unlink($uploads_htaccess);
 }
 
-// ── 루트 디렉터리에 .htaccess 생성 (취약 실습용: 디렉토리 리스팅 허용) ────────
-$root_htaccess_content = "# 취약 실습 모드: 디렉토리 리스팅 허용\n"
-                       . "Options +Indexes\n";
-@file_put_contents(__DIR__ . '/.htaccess', $root_htaccess_content);
+// ── 루트 디렉터리의 불필요한 .htaccess가 남아있다면 제거 ──────────────
+$root_htaccess = __DIR__ . '/.htaccess';
+if (file_exists($root_htaccess)) {
+    @unlink($root_htaccess);
+}
 
 $redirect = $_GET['redirect'] ?? '/index.php';
 if (!is_string($redirect) || substr($redirect, 0, 1) !== '/' || substr($redirect, 0, 2) === '//') {
