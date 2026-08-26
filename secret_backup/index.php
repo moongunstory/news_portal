@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/../config.php';
 
 // ── 보안 모드 (SECURE_MODE = true) 인 경우: 디렉토리 리스팅 전면 차단 (403 Forbidden) ──
