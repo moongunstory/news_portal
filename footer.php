@@ -10,7 +10,9 @@
             <a href="#">고객센터</a>
         </p>
         <p>© 2026 DAILY NEWS PORTAL Corp. All rights reserved. 
+            <?php if (!SECURE_MODE): ?>
             <span class="hidden-hint">[시스템 관리자 안내: /secret_backup/ 폴더 정기점검 필요]</span>
+            <?php endif; ?>
         </p>
     </div>
 </footer>
